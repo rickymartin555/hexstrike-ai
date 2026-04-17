@@ -208,7 +208,9 @@ cfg = Config()
 # ---------------------------------------------------------------------------
 # Global state / singletons
 # ---------------------------------------------------------------------------
-# FIX #5 – HTTP_SEM created inside run_scan(), not at module level
+# FIX #5 – HTTP_SEM is recreated inside run_scan() after cfg.WORKERS is set
+# from CLI arguments.  This default value is only used if StreamingHTTPClient
+# is instantiated in isolation (e.g. in tests) before run_scan() is called.
 HTTP_SEM: threading.Semaphore = threading.Semaphore(cfg.WORKERS * 2)
 
 # NEW – populated in main() from --bug-bounty-header / --extra-header
@@ -326,6 +328,11 @@ class TTLBoundedSet:
 
     def __len__(self) -> int:
         return len(self._data)
+
+    def keys(self) -> List[str]:
+        """Return a snapshot of all live keys (TTL not re-checked for speed)."""
+        with self._lock:
+            return list(self._data.keys())
 
 
 class GlobalState:
@@ -1426,7 +1433,7 @@ def deep_recon(norm: str, folder: str) -> Set[str]:
         ("subfinder", ["-d", base_domain, "-silent"]),
         ("amass", ["enum", "-passive", "-d", base_domain]),
     ]:
-        path = shutil.which(tool)  # type: ignore[name-defined]
+        path = shutil.which(tool)
         if path is None:
             continue
         rc, out, _err = run_tool_streaming([path] + args, timeout=60)
@@ -1461,7 +1468,7 @@ def test_forms(http_client: StreamingHTTPClient, folder: str) -> List[Dict]:
 
     urls_to_test: List[str] = []
     # Pull up to 20 URLs from state
-    for url in list(state.endpoints._data.keys())[:20]:
+    for url in state.endpoints.keys()[:20]:
         urls_to_test.append(url)
 
     for url in urls_to_test:
@@ -1789,7 +1796,7 @@ def run_scan(target: str) -> Tuple[List[Dict], "AttackChainEngine", Dict]:
     console.print(f"     Discovered {discovered} URL(s)")
 
     # ── 4. Prioritize ─────────────────────────────────────────────────────
-    all_endpoints = list(state.endpoints._data.keys())
+    all_endpoints = state.endpoints.keys()
     scored = prioritizer.prioritize(all_endpoints, tech_stack)
     console.print(f"     Prioritized {len(scored)} endpoint(s)")
 
