@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HexStrike AI Bug Bounty Engine v14.1.0-r2
+HexStrike AI Bug Bounty Engine v14.1.0-r3
 ==========================================
 AI-driven web application security scanner with adaptive exploit chains,
 RAG-backed memory, and LLM reasoning via DeepSeek/Ollama.
@@ -879,14 +879,16 @@ class LLMClient:
         if expect_json:
             body["response_format"] = {"type": "json_object"}
         try:
+            llm_headers = {
+                "Authorization": f"Bearer {cfg.DEEPINFRA_KEY}",
+                "Content-Type": "application/json",
+            }
+            if BUG_BOUNTY_HEADER:
+                llm_headers.update(BUG_BOUNTY_HEADER)
             resp = _requests.post(
                 "https://api.deepinfra.com/v1/openai/chat/completions",
                 json=body,
-                headers={
-                    "Authorization": f"Bearer {cfg.DEEPINFRA_KEY}",
-                    "Content-Type": "application/json",
-                    **BUG_BOUNTY_HEADER,
-                },
+                headers=llm_headers,
                 timeout=30,
             )
             if resp.ok:
